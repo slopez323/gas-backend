@@ -33,6 +33,8 @@ const createUser = async (username, password) => {
       username,
       password,
       id: uuid(),
+      favorites: [],
+      data: [],
     };
     collection.insertOne(user);
     return user.id;
