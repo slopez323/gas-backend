@@ -3,6 +3,18 @@ var express = require("express");
 const { gasDB } = require("../mongo");
 var router = express.Router();
 
+const GAS_PAYMENT = {
+  cash: { price: "--", updatedBy: "", updateTime: "" },
+  credit: { price: "--", updatedBy: "", updateTime: "" },
+};
+
+const GAS_TYPES = {
+  regular: GAS_PAYMENT,
+  midgrade: GAS_PAYMENT,
+  premium: GAS_PAYMENT,
+  diesel: GAS_PAYMENT,
+};
+
 router.get("/station/:placeId", async function (req, res, next) {
   try {
     const id = req.params.placeId;
@@ -70,34 +82,26 @@ router.post("/update-price", async function (req, res, next) {
     if (!station) {
       await stationCollection.insertOne({
         id: placeId,
-        [type]: { [method]: { price, updatedBy: username, updateTime: time } },
       });
-    } else if (!station[type]) {
       await stationCollection.updateOne(
+        { id: placeId },
         {
-          id: placeId,
-        },
-        {
-          $set: {
-            [type]: {
-              [method]: { price, updatedBy: username, updateTime: time },
-            },
-          },
-        }
-      );
-    } else {
-      const typemethod = `${type}.${method}`;
-      await stationCollection.updateOne(
-        {
-          id: placeId,
-        },
-        {
-          $set: {
-            [typemethod]: { price, updatedBy: username, updateTime: time },
-          },
+          $set: GAS_TYPES,
         }
       );
     }
+
+    const typemethod = `${type}.${method}`;
+    await stationCollection.updateOne(
+      {
+        id: placeId,
+      },
+      {
+        $set: {
+          [typemethod]: { price, updatedBy: username, updateTime: time },
+        },
+      }
+    );
 
     res.json({ success: true, message: "price updated" });
   } catch (e) {
