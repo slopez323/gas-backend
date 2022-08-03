@@ -142,15 +142,15 @@ router.put("/add-fav", async function (req, res, next) {
   try {
     const userId = req.body.userId;
     const placeId = req.body.placeId;
-    const name = req.body.name;
-    const address = req.body.vicinity;
+    const placeName = req.body.name;
+    const placeAddress = req.body.vicinity;
     const time = new Date();
 
     const FAV_LOG = {
       activity: "add-fav",
       placeId,
-      name,
-      address,
+      placeName,
+      placeAddress,
       time,
     };
 
@@ -176,15 +176,15 @@ router.put("/remove-fav", async function (req, res, next) {
   try {
     const userId = req.body.userId;
     const placeId = req.body.placeId;
-    const name = req.body.name;
-    const address = req.body.vicinity;
+    const placeName = req.body.name;
+    const placeAddress = req.body.vicinity;
     const time = new Date();
 
     const FAV_LOG = {
       activity: "remove-fav",
       placeId,
-      name,
-      address,
+      placeName,
+      placeAddress,
       time,
     };
 
@@ -202,6 +202,21 @@ router.put("/remove-fav", async function (req, res, next) {
     );
 
     res.json({ success: true, message: "Updated user favorites" });
+  } catch (e) {
+    console.error(e);
+    res.json({ success: false });
+  }
+});
+
+router.delete("/delete-user/:id", async function (req, res, next) {
+  try {
+    const id = req.params.id;
+
+    const collection = await gasDB().collection("users");
+
+    await collection.deleteOne({ id });
+
+    res.json({ success: true, message: "User deleted" });
   } catch (e) {
     console.error(e);
     res.json({ success: false });

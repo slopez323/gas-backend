@@ -59,25 +59,25 @@ router.post("/update-price", async function (req, res, next) {
     const station = await stationCollection.findOne({ id: placeId });
 
     //update user log
-    if (!user.log) {
-      await userCollection.updateOne(
-        { username },
-        {
-          $set: {
-            log: [PRICE_LOG],
-          },
-        }
-      );
-    } else {
-      await userCollection.updateOne(
-        { username },
-        {
-          $push: {
-            log: PRICE_LOG,
-          },
-        }
-      );
-    }
+    // if (!user.log) {
+    //   await userCollection.updateOne(
+    //     { username },
+    //     {
+    //       $set: {
+    //         log: [PRICE_LOG],
+    //       },
+    //     }
+    //   );
+    // } else {
+    await userCollection.updateOne(
+      { username },
+      {
+        $push: {
+          log: PRICE_LOG,
+        },
+      }
+    );
+    // }
 
     //update station data
     if (!station) {
