@@ -42,20 +42,29 @@ router.post("/update-price", async function (req, res, next) {
     const username = req.body.username;
     const time = new Date();
 
+    const PRICE_LOG = {
+      activity: "price-update",
+      placeId,
+      placeName,
+      placeAddress,
+      price,
+      type,
+      method,
+      time,
+    };
+
     const userCollection = await gasDB().collection("users");
     const stationCollection = await gasDB().collection("stations");
     const user = await userCollection.findOne({ username });
     const station = await stationCollection.findOne({ id: placeId });
 
     //update user log
-    if (!user.data) {
+    if (!user.log) {
       await userCollection.updateOne(
         { username },
         {
           $set: {
-            data: [
-              { placeId, placeName, placeAddress, price, type, method, time },
-            ],
+            log: [PRICE_LOG],
           },
         }
       );
@@ -64,15 +73,7 @@ router.post("/update-price", async function (req, res, next) {
         { username },
         {
           $push: {
-            data: {
-              placeId,
-              placeName,
-              placeAddress,
-              price,
-              type,
-              method,
-              time,
-            },
+            log: PRICE_LOG,
           },
         }
       );
