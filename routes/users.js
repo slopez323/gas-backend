@@ -7,7 +7,7 @@ const jwt = require("jsonwebtoken");
 
 const isUniqueUser = async (username) => {
   const collection = await gasDB().collection("users");
-  const existingUser = await collection.find({ username: username }).toArray();
+  const existingUser = await collection.find({ username }).toArray();
   if (existingUser.length > 0) {
     return false;
   }
@@ -54,9 +54,17 @@ router.post("/register", async function (req, res, next) {
     const username = req.body.username;
     const password = req.body.password;
 
-    const unique = await isUniqueUser(username);
+    if (username.length < 5) {
+      res.json({
+        message: "Username must be at least 5 characters long.",
+        success: false,
+      });
+      return;
+    }
+
+    const unique = await isUniqueUser(username.toLowerCase());
     if (!unique) {
-      res.json({ message: "Username not available", success: false });
+      res.json({ message: "Username not available.", success: false });
       return;
     }
     const valid = await isValidPass(password);
@@ -72,17 +80,17 @@ router.post("/register", async function (req, res, next) {
     const saltRounds = 10;
     const salt = await bcrypt.genSalt(saltRounds);
     const hash = await bcrypt.hash(password, salt);
-    const userId = await createUser(username, hash);
+    const userId = await createUser(username.toLowerCase(), hash);
 
     const jwtSecretKey = process.env.JWT_SECRET_KEY;
     const data = {
       time: new Date(),
       userId,
     };
-    const token = jwt.sign(data, jwtSecretKey);
+    const token = jwt.sign(data, jwtSecretKey, { expiresIn: "15m" });
 
     if (userId) {
-      res.json({ success: true, id: userId, token });
+      res.json({ success: true, token });
       return;
     }
   } catch (e) {
@@ -96,7 +104,7 @@ router.post("/login", async function (req, res, next) {
     const collection = await gasDB().collection("users");
     const user = await collection.findOne({ username: req.body.username });
     if (!user) {
-      res.json({ message: "User does not exist", success: false });
+      res.json({ message: "User does not exist.", success: false });
       return;
     }
 
@@ -108,13 +116,13 @@ router.post("/login", async function (req, res, next) {
       userId: user.id,
       // scope: user.username.includes("codeimmersives.com") ? "admin" : "user",
     };
-    const token = jwt.sign(data, jwtSecretKey);
+    const token = jwt.sign(data, jwtSecretKey, { expiresIn: "15m" });
 
     if (match) {
-      res.json({ success: true, id: user.id, token });
+      res.json({ success: true, token });
       return;
     } else {
-      res.json({ message: "Incorrect Password", success: false });
+      res.json({ message: "Incorrect Password.", success: false });
       return;
     }
   } catch (e) {
@@ -217,6 +225,24 @@ router.delete("/delete-user/:id", async function (req, res, next) {
     await collection.deleteOne({ id });
 
     res.json({ success: true, message: "User deleted" });
+  } catch (e) {
+    console.error(e);
+    res.json({ success: false });
+  }
+});
+
+router.get("/validate-token", function (req, res, next) {
+  try {
+    const tokenHeaderKey = process.env.TOKEN_HEADER_KEY;
+    const jwtSecretKey = process.env.JWT_SECRET_KEY;
+
+    const token = req.header(tokenHeaderKey);
+    const verified = jwt.verify(token, jwtSecretKey);
+
+    if (verified) {
+      return res.json({ success: true, message: verified.userId });
+    }
+    return res.json({ success: false });
   } catch (e) {
     console.error(e);
     res.json({ success: false });
