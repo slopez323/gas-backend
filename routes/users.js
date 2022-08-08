@@ -131,20 +131,94 @@ router.post("/login", async function (req, res, next) {
   }
 });
 
-router.get("/user/:userId", async function (req, res, next) {
-  try {
-    const id = req.params.userId;
-    const collection = await gasDB().collection("users");
-    const user = await collection.findOne({ id });
+router.get("/user", async function (req, res, next) {
+  const id = req.query.id;
+  const filter = req.query.filter;
+  const sort = req.query.sort;
+  const page = Number(req.query.page);
+  const limit = Number(req.query.limit);
+  const skip = (page - 1) * limit;
 
-    const { username, favorites, log } = user;
+  const filterType = () => {
+    if (filter === "fav") {
+      return {
+        $or: [
+          {
+            "log.activity": "add-fav",
+          },
+          {
+            "log.activity": "remove-fav",
+          },
+        ],
+      };
+    } else if (filter === "price") {
+      return {
+        "log.activity": "price-update",
+      };
+    } else return {};
+  };
 
-    res.json({ success: true, username, favorites, log });
-  } catch (e) {
-    console.error(e);
-    res.json({ success: false, message: e });
-  }
+  const sortType = () => {
+    if (sort === "asc") {
+      return { "log.time": 1 };
+    } else return { "log.time": -1 };
+  };
+
+  const collection = await gasDB().collection("users");
+
+  const user = await collection
+    .aggregate([
+      {
+        $match: { id },
+      },
+      {
+        $unwind: "$log",
+      },
+      {
+        $match: filterType(),
+      },
+      {
+        $sort: sortType(),
+      },
+      {
+        $group: {
+          _id: "$_id",
+          username: { $first: "$username" },
+          favorites: { $first: "$favorites" },
+          log: { $push: "$log" },
+        },
+      },
+      {
+        $project: {
+          username: 1,
+          favorites: 1,
+          totalLogs: {
+            $size: "$log",
+          },
+          log: {
+            $slice: ["$log", skip, limit ? limit : 10],
+          },
+        },
+      },
+    ])
+    .toArray();
+  res.json({ success: true, message: user[0] });
 });
+
+// router.get("/user/:userId", async function (req, res, next) {
+//   try {
+//     const id = req.params.userId;
+//     const collection = await gasDB().collection("users");
+//     const user = await collection.findOne({ id });
+
+//     const { username, favorites, log } = user;
+
+//     res.json({ success: true, username, favorites, log });
+//   } catch (e) {
+//     console.error(e);
+//     res.json({ success: false, message: e });
+//   }
+// });
 
 router.put("/add-fav", async function (req, res, next) {
   try {
