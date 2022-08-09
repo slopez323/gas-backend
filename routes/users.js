@@ -26,12 +26,13 @@ const isValidPass = (password) => {
   return true;
 };
 
-const createUser = async (username, password) => {
+const createUser = async (username, password, userType) => {
   try {
     const collection = await gasDB().collection("users");
     const user = {
       username,
       password,
+      access: userType,
       id: uuid(),
       favorites: [],
       log: [],
@@ -51,7 +52,7 @@ router.get("/", function (req, res, next) {
 
 router.post("/register", async function (req, res, next) {
   try {
-    const username = req.body.username;
+    const username = req.body.username.toLowerCase();
     const password = req.body.password;
 
     if (username.length < 5) {
@@ -62,7 +63,7 @@ router.post("/register", async function (req, res, next) {
       return;
     }
 
-    const unique = await isUniqueUser(username.toLowerCase());
+    const unique = await isUniqueUser(username);
     if (!unique) {
       res.json({ message: "Username not available.", success: false });
       return;
@@ -77,15 +78,22 @@ router.post("/register", async function (req, res, next) {
       return;
     }
 
+    const userType = username === "admin" ? "admin" : "user";
+
     const saltRounds = 10;
     const salt = await bcrypt.genSalt(saltRounds);
     const hash = await bcrypt.hash(password, salt);
-    const userId = await createUser(username.toLowerCase(), hash);
+    const userId = await createUser(username, hash, userType);
+
+    // const userType = username.includes("@codeimmersives.com")
+    //   ? "admin"
+    //   : "user";
 
     const jwtSecretKey = process.env.JWT_SECRET_KEY;
     const data = {
       time: new Date(),
       userId,
+      scope: userType,
     };
     const token = jwt.sign(data, jwtSecretKey, { expiresIn: "15m" });
 
@@ -101,20 +109,27 @@ router.post("/register", async function (req, res, next) {
 
 router.post("/login", async function (req, res, next) {
   try {
+    const username = req.body.username.toLowerCase();
+    const password = req.body.password;
+
     const collection = await gasDB().collection("users");
-    const user = await collection.findOne({ username: req.body.username });
+    const user = await collection.findOne({ username });
     if (!user) {
       res.json({ message: "User does not exist.", success: false });
       return;
     }
 
-    const match = await bcrypt.compare(req.body.password, user.password);
+    const match = await bcrypt.compare(password, user.password);
+
+    // const userType = username.includes("@codeimmersives.com")
+    //   ? "admin"
+    //   : "user";
 
     const jwtSecretKey = process.env.JWT_SECRET_KEY;
     const data = {
       time: new Date(),
       userId: user.id,
-      // scope: user.username.includes("codeimmersives.com") ? "admin" : "user",
+      scope: user.access,
     };
     const token = jwt.sign(data, jwtSecretKey, { expiresIn: "15m" });
 
@@ -172,7 +187,7 @@ router.get("/user", async function (req, res, next) {
         $match: { id },
       },
       {
-        $unwind: "$log",
+        $unwind: { path: "$log", preserveNullAndEmptyArrays: true },
       },
       {
         $match: filterType(),
@@ -202,23 +217,9 @@ router.get("/user", async function (req, res, next) {
       },
     ])
     .toArray();
+
   res.json({ success: true, message: user[0] });
 });
-
-// router.get("/user/:userId", async function (req, res, next) {
-//   try {
-//     const id = req.params.userId;
-//     const collection = await gasDB().collection("users");
-//     const user = await collection.findOne({ id });
-
-//     const { username, favorites, log } = user;
-
-//     res.json({ success: true, username, favorites, log });
-//   } catch (e) {
-//     console.error(e);
-//     res.json({ success: false, message: e });
-//   }
-// });
 
 router.put("/add-fav", async function (req, res, next) {
   try {
@@ -314,7 +315,19 @@ router.get("/validate-token", function (req, res, next) {
     const verified = jwt.verify(token, jwtSecretKey);
 
     if (verified) {
-      return res.json({ success: true, message: verified.userId });
+      if (verified.scope === "admin") {
+        return res.json({
+          success: true,
+          message: verified.userId,
+          isAdmin: true,
+        });
+      } else {
+        return res.json({
+          success: true,
+          message: verified.userId,
+          isAdmin: false,
+        });
+      }
     }
     return res.json({ success: false });
   } catch (e) {
@@ -323,4 +336,4 @@ router.get("/validate-token", function (req, res, next) {
   }
 });
 
-module.exports = router;
+module.exports = { usersRouter: router, isUniqueUser, isValidPass, createUser };
