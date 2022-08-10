@@ -6,20 +6,35 @@ const bcrypt = require("bcryptjs");
 
 router.get("/all-users", async function (req, res, next) {
   try {
-    const filter =
-      req.query.filter === "all" ? {} : { access: req.query.filter };
+    const searchType = req.query.searchType;
+    const searchTerm = req.query.searchTerm;
+    const filter = req.query.filter;
     const page = Number(req.query.page);
     const limit = Number(req.query.limit);
     const skip = limit * (page - 1);
 
+    console.log("search", searchTerm);
+
+    const find = () => {
+      if (filter === "all") {
+        if (searchTerm !== "none") {
+          return { [searchType]: new RegExp(searchTerm, "i") };
+        } else return {};
+      } else {
+        if (searchTerm !== "none") {
+          return { [searchType]: new RegExp(searchTerm, "i"), access: filter };
+        } else return { access: req.query.filter };
+      }
+    };
+
     const collection = await gasDB().collection("users");
     const users = await collection
-      .find(filter)
+      .find(find())
       .project({ password: 0, favorites: 0, log: 0 })
       .skip(skip)
       .limit(limit)
       .toArray();
-    const count = await collection.find(filter).count();
+    const count = await collection.find(find()).count();
 
     if (users) {
       res.json({ success: true, message: users, count });
