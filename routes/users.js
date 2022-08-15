@@ -45,11 +45,6 @@ const createUser = async (username, password, userType) => {
   }
 };
 
-/* GET users listing. */
-router.get("/", function (req, res, next) {
-  res.send("respond with a resource");
-});
-
 router.post("/register", async function (req, res, next) {
   try {
     const username = req.body.username.toLowerCase();
@@ -85,10 +80,6 @@ router.post("/register", async function (req, res, next) {
     const hash = await bcrypt.hash(password, salt);
     const userId = await createUser(username, hash, userType);
 
-    // const userType = username.includes("@codeimmersives.com")
-    //   ? "admin"
-    //   : "user";
-
     const jwtSecretKey = process.env.JWT_SECRET_KEY;
     const data = {
       time: new Date(),
@@ -120,10 +111,6 @@ router.post("/login", async function (req, res, next) {
     }
 
     const match = await bcrypt.compare(password, user.password);
-
-    // const userType = username.includes("@codeimmersives.com")
-    //   ? "admin"
-    //   : "user";
 
     const jwtSecretKey = process.env.JWT_SECRET_KEY;
     const data = {

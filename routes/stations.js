@@ -57,7 +57,6 @@ router.post("/update-price", async function (req, res, next) {
 
     const userCollection = await gasDB().collection("users");
     const stationCollection = await gasDB().collection("stations");
-    // const user = await userCollection.findOne({ username });
     const station = await stationCollection.findOne({ id: placeId });
 
     await userCollection.updateOne(
@@ -69,7 +68,6 @@ router.post("/update-price", async function (req, res, next) {
       }
     );
 
-    //update station data
     if (!station) {
       await stationCollection.insertOne({
         id: placeId,
@@ -110,10 +108,8 @@ router.put("/delete-price", async function (req, res, next) {
   try {
     const username = req.body.username;
     const placeId = req.body.placeId;
-    // const price = req.body.price;
     const type = req.body.type;
     const method = req.body.method;
-    // const time = req.body.time;
     const activityId = req.body.activityId;
 
     const typemethod = `${type}.${method}`;
