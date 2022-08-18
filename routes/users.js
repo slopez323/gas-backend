@@ -4,6 +4,17 @@ var router = express.Router();
 const { uuid } = require("uuidv4");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const sgMail = require("@sendgrid/mail");
+const generator = require("generate-password");
+
+const isUniqueEmail = async (email) => {
+  const collection = await gasDB().collection("users");
+  const existingEmail = await collection.find({ email }).toArray();
+  if (existingEmail.length > 0) {
+    return false;
+  }
+  return true;
+};
 
 const isUniqueUser = async (username) => {
   const collection = await gasDB().collection("users");
@@ -26,10 +37,11 @@ const isValidPass = (password) => {
   return true;
 };
 
-const createUser = async (username, password, userType) => {
+const createUser = async (email, username, password, userType) => {
   try {
     const collection = await gasDB().collection("users");
     const user = {
+      email,
       username,
       password,
       access: userType,
@@ -47,9 +59,17 @@ const createUser = async (username, password, userType) => {
 
 router.post("/register", async function (req, res, next) {
   try {
+    const email = req.body.email.toLowerCase();
     const username = req.body.username.toLowerCase();
     const password = req.body.password;
 
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      res.json({
+        message: "Enter a valid email.",
+        success: false,
+      });
+      return;
+    }
     if (username.length < 5) {
       res.json({
         message: "Username must be at least 5 characters long.",
@@ -58,12 +78,20 @@ router.post("/register", async function (req, res, next) {
       return;
     }
 
-    const unique = await isUniqueUser(username);
-    if (!unique) {
+    const uniqueEmail = await isUniqueEmail(email);
+    if (!uniqueEmail) {
+      res.json({
+        message: "This email address already has an existing account.",
+        success: false,
+      });
+      return;
+    }
+    const uniqueUser = await isUniqueUser(username);
+    if (!uniqueUser) {
       res.json({ message: "Username not available.", success: false });
       return;
     }
-    const valid = await isValidPass(password);
+    const valid = isValidPass(password);
     if (!valid) {
       res.json({
         message:
@@ -78,7 +106,7 @@ router.post("/register", async function (req, res, next) {
     const saltRounds = 10;
     const salt = await bcrypt.genSalt(saltRounds);
     const hash = await bcrypt.hash(password, salt);
-    const userId = await createUser(username, hash, userType);
+    const userId = await createUser(email, username, hash, userType);
 
     const jwtSecretKey = process.env.JWT_SECRET_KEY;
     const data = {
@@ -130,6 +158,103 @@ router.post("/login", async function (req, res, next) {
   } catch (e) {
     console.error(e);
     res.status(500).json({ message: e, success: false });
+  }
+});
+
+router.put("/change-password", async function (req, res, next) {
+  try {
+    const id = req.body.userId;
+    const password = req.body.password;
+
+    const valid = isValidPass(password);
+    if (!valid) {
+      res.json({
+        message:
+          "Password must be at least 8 characters long, must not include spaces and must include at least 1 letter, number and special character.",
+        success: false,
+      });
+      return;
+    }
+
+    const saltRounds = 10;
+    const salt = await bcrypt.genSalt(saltRounds);
+    const hash = await bcrypt.hash(password, salt);
+
+    const collection = await gasDB().collection("users");
+    await collection.updateOne(
+      { id },
+      {
+        $set: {
+          password: hash,
+        },
+      }
+    );
+
+    res.json({ success: true, message: "Password successfully changed." });
+  } catch (e) {
+    console.error(e);
+    res.json({ success: false });
+  }
+});
+
+router.post("/forget-password", async function (req, res, next) {
+  try {
+    const email = req.body.email;
+
+    const collection = await gasDB().collection("users");
+    const user = await collection.findOne(
+      { email },
+      { projection: { favorites: 0, log: 0 } }
+    );
+
+    if (!user) {
+      res.json({
+        success: false,
+        message: "No user associated with this email address.",
+      });
+      return;
+    }
+
+    const password = generator.generate({
+      length: 10,
+      numbers: true,
+    });
+    const saltRounds = 10;
+    const salt = await bcrypt.genSalt(saltRounds);
+    const hash = await bcrypt.hash(password, salt);
+
+    await collection.updateOne(
+      { email },
+      {
+        $set: {
+          password: hash,
+        },
+      }
+    );
+
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+    const msg = {
+      to: email,
+      from: "mygas.auto@gmail.com",
+      subject: "myGas Temporary Password",
+      text: `Your temporary password is ${password}.  You may change your password once you are signed in to your account.`,
+    };
+    sgMail
+      .send(msg)
+      .then(() => {
+        res.json({
+          success: true,
+          message:
+            "A temporary password has been created for you and will be sent to your email in the next few minutes.",
+        });
+      })
+      .catch((e) => {
+        console.error(e);
+        res.json({ success: false });
+      });
+  } catch (e) {
+    console.error(e);
+    res.json({ success: false });
   }
 });
 
@@ -323,4 +448,10 @@ router.get("/validate-token", function (req, res, next) {
   }
 });
 
-module.exports = { usersRouter: router, isUniqueUser, isValidPass, createUser };
+module.exports = {
+  usersRouter: router,
+  isUniqueEmail,
+  isUniqueUser,
+  isValidPass,
+  createUser,
+};
