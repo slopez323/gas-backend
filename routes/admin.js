@@ -13,8 +13,6 @@ router.get("/all-users", async function (req, res, next) {
     const limit = Number(req.query.limit);
     const skip = limit * (page - 1);
 
-    console.log("search", searchTerm);
-
     const find = () => {
       if (filter === "all") {
         if (searchTerm !== "none") {
@@ -47,10 +45,18 @@ router.get("/all-users", async function (req, res, next) {
 
 router.post("/create-user", async function (req, res, next) {
   try {
+    const email = req.body.email.toLowerCase();
     const username = req.body.username.toLowerCase();
     const password = req.body.password;
     const access = req.body.access;
 
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      res.json({
+        message: "Enter a valid email.",
+        success: false,
+      });
+      return;
+    }
     if (username.length < 5) {
       res.json({
         message: "Username must be at least 5 characters long.",
@@ -59,12 +65,20 @@ router.post("/create-user", async function (req, res, next) {
       return;
     }
 
-    const unique = await isUniqueUser(username);
-    if (!unique) {
+    const uniqueEmail = await isUniqueEmail(email);
+    if (!uniqueEmail) {
+      res.json({
+        message: "This email address already has an existing account.",
+        success: false,
+      });
+      return;
+    }
+    const uniqueUser = await isUniqueUser(username);
+    if (!uniqueUser) {
       res.json({ message: "Username not available.", success: false });
       return;
     }
-    const valid = await isValidPass(password);
+    const valid = isValidPass(password);
     if (!valid) {
       res.json({
         message:
@@ -77,7 +91,7 @@ router.post("/create-user", async function (req, res, next) {
     const saltRounds = 10;
     const salt = await bcrypt.genSalt(saltRounds);
     const hash = await bcrypt.hash(password, salt);
-    const userId = await createUser(username, hash, access);
+    const userId = await createUser(email, username, hash, access);
 
     if (userId) {
       res.json({ success: true, message: "User created." });
@@ -92,6 +106,7 @@ router.post("/create-user", async function (req, res, next) {
 router.put("/edit-user", async function (req, res, next) {
   try {
     const id = req.body.id;
+    const email = req.body.email;
     const username = req.body.username;
     const access = req.body.access;
 
@@ -100,7 +115,7 @@ router.put("/edit-user", async function (req, res, next) {
     await collection.updateOne(
       { id },
       {
-        $set: { username, access },
+        $set: { email, username, access },
       }
     );
 
