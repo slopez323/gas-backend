@@ -143,4 +143,18 @@ router.put("/delete-price", async function (req, res, next) {
   }
 });
 
+router.get("/log/:placeId", async function (req, res, next) {
+  try {
+    const id = req.params.placeId;
+    const collection = await gasDB().collection("stations");
+
+    const log = await collection.findOne({ id });
+
+    res.json({ success: true, message: log });
+  } catch (e) {
+    console.error(e);
+    res.json({ success: false });
+  }
+});
+
 module.exports = router;
